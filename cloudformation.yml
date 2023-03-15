@@ -1,0 +1,179 @@
+# File 1: CloudFormation Stack
+
+
+# CloudFormation Stack to create all necessary resources
+
+Resources:
+  # IAM Role for Lambda functions
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: lambda_execution_role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+        - arn:aws:iam::aws:policy/SecretsManagerReadWrite
+      Tags:
+        - Key: 'Name'
+          Value: 'lambda_execution_role'
+
+  # API Gateway to receive webhook payload from Orderful
+  OrderfulAPIGateway:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: OrderfulAPIGateway
+      Description: API Gateway to receive webhook payload from Orderful
+      Tags:
+        - Key: 'Name'
+          Value: 'OrderfulAPIGateway'
+
+  # API Gateway Resource
+  OrderfulAPIGatewayResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref OrderfulAPIGateway
+      ParentId: !GetAtt [OrderfulAPIGateway, RootResourceId]
+      PathPart: webhook
+      Tags:
+        - Key: 'Name'
+          Value: 'OrderfulAPIGatewayResource'
+
+  # API Gateway Method
+  OrderfulAPIGatewayMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      RestApiId: !Ref OrderfulAPIGateway
+      ResourceId: !Ref OrderfulAPIGatewayResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProcessPayloadFunction.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: ''
+      Tags:
+        - Key: 'Name'
+          Value: 'OrderfulAPIGatewayMethod'
+
+  # OrderfulConfirmTransactionQueue
+  OrderfulConfirmTransactionQueue:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: orderful-confirm-transaction-queue
+      Tags:
+        - Key: 'Name'
+          Value: 'OrderfulConfirmTransactionQueue'
+
+  # ConvertToEdiQueue
+  ConvertToEdiQueue:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: convert-to-edi-queue
+      Tags:
+        - Key: 'Name'
+          Value: 'ConvertToEdiQueue'
+
+  # EdiUploadQueue
+  EdiUploadQueue:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: edi-upload-queue
+      Tags:
+        - Key: 'Name'
+          Value: 'EdiUploadQueue'
+
+  # ErrorQueue
+  ErrorQueue:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: error-queue
+      Tags:
+        - Key: 'Name'
+          Value
+          : 'ErrorQueue'
+
+  # EDI Bucket
+  EdiBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Ref EDIBucketName
+      Tags:
+        - Key: 'Name'
+          Value: 'EdiBucket'
+
+  # Lambda function environment variables
+  EnvironmentVariables:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: /orderful/api_key
+      Description: Orderful API Key
+      Type: String
+      Value: ''
+  EDIBucketName:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: /orderful/edi_bucket_name
+      Description: EDI Bucket Name
+      Type: String
+      Value: ''
+  EdiBucketFolderProcessing:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: /orderful/edi_bucket_folder_processing
+      Description: EDI Bucket Processing Folder
+      Type: String
+      Value: ''
+  EdiBucketFolderProcessed:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: /orderful/edi_bucket
+          _folder_processed
+      Description: EDI Bucket Processed Folder
+      Type: String
+      Value: ''
+  EdiBucketFolderErrors:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: /orderful/edi_bucket_folder_errors
+      Description: EDI Bucket Errors Folder
+      Type: String
+      Value: ''
+  SftpHost:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: /orderful/sftp_host
+      Description: SFTP Host
+      Type: String
+      Value: ''
+  SftpUser:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: /orderful/sftp_user
+      Description: SFTP User
+      Type: String
+      Value: ''
+  SftpPass:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: /orderful/sftp_pass
+      Description: SFTP Password
+      Type: String
+      Value: ''
+  SftpFolderDestination:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: /orderful/sftp_folder_destination
+      Description: SFTP Folder Destination

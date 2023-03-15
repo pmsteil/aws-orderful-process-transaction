@@ -1,0 +1,48 @@
+// Here is an example JSON file that defines the state machine for this project:
+// Note that you will need to replace `REGION` and `ACCOUNT_ID` with the appropriate values for your AWS account. You will also need to define IAM roles with the necessary permissions for each Lambda function to interact with the other AWS resources, such as SQS and S3.
+
+
+{
+  "Comment": "Orderful Integration State Machine",
+  "StartAt": "ProcessPayload",
+  "States": {
+    "ProcessPayload": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:REGION:ACCOUNT_ID:function:ProcessPayloadFunction",
+      "Next": "ConvertToEdi"
+    },
+    "ConvertToEdi": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:REGION:ACCOUNT_ID:function:ConvertToEdiFunction",
+      "Next": "EdiUpload"
+    },
+    "EdiUpload": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:REGION:ACCOUNT_ID:function:EdiUploadFunction",
+      "Next": "OrderfulConfirmTransaction",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 180,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "Error"
+        }
+    },
+    "OrderfulConfirmTransaction": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:REGION:ACCOUNT_ID:function:OrderfulConfirmTransactionFunction",
+      "End": true
+    },
+    "Error": {
+      "Type": "Fail",
+      "Cause": "An error occurred in the EdiUpload state",
+      "Error": "Error uploading EDI file to client's SFTP server"
+    }
+  }
+}
